@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI입문 — 회차별 접속 링크</title>
+<link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css" />
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Pretendard','Apple SD Gothic Neo',sans-serif;background:#fff;color:#2c3e50;padding:24px;letter-spacing:-0.01em}
+h1{font-size:22px;font-weight:800;margin-bottom:4px}
+.sub{font-size:13px;color:#8a9ab0;margin-bottom:20px}
+.config{background:#f0f6ff;border:1px solid #d0e4f8;border-radius:10px;padding:14px 16px;margin-bottom:20px}
+.config label{font-size:12px;font-weight:700;color:#4a90d9;display:block;margin-bottom:6px}
+.config input{width:100%;max-width:420px;border:1.5px solid #c5d2e0;border-radius:7px;padding:8px 10px;font-size:13px;font-family:inherit}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th,td{padding:10px 12px;text-align:left;border-bottom:1px solid #eaf0f8}
+th{background:#f0f6ff;color:#4a90d9;font-weight:700;font-size:12px}
+tr:hover td{background:#fafcff}
+.note{font-size:11px;color:#e08a3a;font-weight:700}
+.link-cell a{color:#4a90d9;text-decoration:none;font-size:12px;word-break:break-all}
+.link-cell a:hover{text-decoration:underline}
+.copy-btn{font-size:11px;padding:3px 8px;border:1px solid #c8dff8;background:#eef5fd;color:#4a90d9;border-radius:5px;cursor:pointer;margin-left:6px}
+.copy-btn:hover{background:#d8eeff}
+.day-badge{font-size:11px;padding:2px 7px;border-radius:5px;background:#eaf0f8;color:#5a7a9a;font-weight:700}
+</style>
+</head>
+<body>
+
+<h1>📋 AI입문 — 15회차 접속 링크표</h1>
+<div class="sub">302동 408호 · 12:00–14:50 · 학생 37명</div>
+
+<div class="config">
+  <label>배포된 사이트 주소 (Netlify URL) 입력 후 Enter:</label>
+  <input type="text" id="base-url" placeholder="예: https://ai-attendance-2026.netlify.app" oninput="rebuild()">
+</div>
+
+<table>
+  <thead>
+    <tr><th>회차</th><th>날짜</th><th>요일</th><th>비고</th><th>학생용 링크</th><th>관리자용 링크</th></tr>
+  </thead>
+  <tbody id="rows"></tbody>
+</table>
+
+<script>
+const sessions = [
+  {n:1,  date:'2026-06-23', day:'화', note:''},
+  {n:2,  date:'2026-06-29', day:'월', note:''},
+  {n:3,  date:'2026-06-30', day:'화', note:''},
+  {n:4,  date:'2026-07-06', day:'월', note:''},
+  {n:5,  date:'2026-07-07', day:'화', note:''},
+  {n:6,  date:'2026-07-09', day:'목', note:''},
+  {n:7,  date:'2026-07-13', day:'월', note:''},
+  {n:8,  date:'2026-07-14', day:'화', note:''},
+  {n:9,  date:'2026-07-15', day:'수', note:'보강'},
+  {n:10, date:'2026-07-16', day:'목', note:''},
+  {n:11, date:'2026-07-18', day:'토', note:'보강'},
+  {n:12, date:'2026-07-20', day:'월', note:''},
+  {n:13, date:'2026-07-21', day:'화', note:''},
+  {n:14, date:'2026-07-23', day:'목', note:''},
+  {n:15, date:'2026-07-27', day:'월', note:'마지막'},
+];
+
+const ADMIN_KEY = btoa('1111'); // MTExMQ==
+
+function rebuild(){
+  const base = document.getElementById('base-url').value.trim().replace(/\/$/,'');
+  const tbody = document.getElementById('rows');
+  tbody.innerHTML = sessions.map(s=>{
+    const sid = `w${s.n}_${s.date.slice(5).replace('-','')}`; // 예: w1_0623
+    const studentUrl = base ? `${base}/?view=student&session=${sid}` : '';
+    const adminUrl = base ? `${base}/?view=admin&session=${sid}&key=${ADMIN_KEY}` : '';
+    return `<tr>
+      <td><b>${s.n}</b></td>
+      <td>${s.date}</td>
+      <td>${s.day}</td>
+      <td>${s.note ? `<span class="note">${s.note}</span>` : ''}</td>
+      <td class="link-cell">${studentUrl
+        ? `<a href="${studentUrl}" target="_blank">${studentUrl}</a><button class="copy-btn" onclick="copyText('${studentUrl}')">복사</button>`
+        : '<span style="color:#bbb">↑ 위에 사이트 주소를 입력하세요</span>'}</td>
+      <td class="link-cell">${adminUrl
+        ? `<a href="${adminUrl}" target="_blank">${adminUrl}</a><button class="copy-btn" onclick="copyText('${adminUrl}')">복사</button>`
+        : ''}</td>
+    </tr>`;
+  }).join('');
+}
+
+function copyText(t){
+  navigator.clipboard.writeText(t).then(()=>{
+    const el = event.target;
+    const orig = el.textContent;
+    el.textContent = '✅';
+    setTimeout(()=>el.textContent=orig, 1000);
+  });
+}
+
+// localStorage에 base-url 저장해서 재방문시 유지
+const saved = localStorage.getItem('ai-attendance-base-url');
+if(saved){ document.getElementById('base-url').value = saved; }
+document.getElementById('base-url').addEventListener('input', e=>{
+  localStorage.setItem('ai-attendance-base-url', e.target.value.trim());
+});
+
+rebuild();
+</script>
+
+</body>
+</html>
