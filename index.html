@@ -138,8 +138,8 @@ input,select,textarea{border:1.5px solid #c5d2e0;border-radius:7px;padding:7px 1
   <div></div>
 </div>
 
-<!-- ★ 상단 모드 전환 스위치 ★ -->
-<div id="mode-switch-bar">
+<!-- ★ 상단 모드 전환 스위치 ★ (관리자 URL로 접속한 경우에만 표시) -->
+<div id="mode-switch-bar" style="display:none">
   <span>화면 전환:</span>
   <div id="mode-toggle">
     <button class="active" id="btn-student" onclick="switchMode('student',this)">🎓 학생 화면</button>
@@ -226,8 +226,12 @@ const ADMIN_KEY_B64 = btoa('1111');        // MTExMQ==
 
 if (viewParam === 'admin' && keyParam === ADMIN_KEY_B64) {
   isAdmin = true;
+  // 관리자로 접속한 경우에만 화면 전환 버튼 표시
+  document.getElementById('mode-switch-bar').style.display = 'flex';
 } else if (viewParam === 'student') {
   isAdmin = false;
+  // 학생용 URL로 접속하면 화면 전환 버튼 완전히 숨김
+  document.getElementById('mode-switch-bar').style.display = 'none';
 }
 
 let _remoteUpdating = false; // 원격 업데이트 중 무한루프 방지
