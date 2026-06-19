@@ -131,8 +131,8 @@ input,select,textarea{border:1.5px solid #c5d2e0;border-radius:7px;padding:7px 1
     <h1>📋 AI입문 좌석 출석</h1>
     <span class="badge" id="mode-badge">🎓 학생</span>
   </div>
-  <div class="header-center">
-    AI입문 &nbsp;|&nbsp; 1회차 1주차 &nbsp;|&nbsp; 2026-06-23 (화)<br>
+  <div class="header-center" id="header-center">
+    AI입문 &nbsp;|&nbsp; 로딩 중...<br>
     <span>302동 408호 &nbsp;|&nbsp; 12:00 – 14:50</span>
   </div>
   <div></div>
@@ -226,24 +226,24 @@ const ADMIN_KEY_B64 = btoa('1111');        // MTExMQ==
 
 if (viewParam === 'admin' && keyParam === ADMIN_KEY_B64) {
   isAdmin = true;
-  // 관리자로 접속한 경우에만 화면 전환 버튼 표시
   document.getElementById('mode-switch-bar').style.display = 'flex';
 } else if (viewParam === 'student') {
   isAdmin = false;
-  // 학생용 URL로 접속하면 화면 전환 버튼 완전히 숨김
   document.getElementById('mode-switch-bar').style.display = 'none';
 }
+
 
 let _remoteUpdating = false; // 원격 업데이트 중 무한루프 방지
 
 // 원격 변경 수신 → 로컬 상태 갱신 후 화면 다시 그림
 sessionRef.on('value', (snap) => {
   const data = snap.val();
-  if (!data) return;
   _remoteUpdating = true;
-  if (data.seats) seats = data.seats;
-  if (data.students) students = data.students;
-  if (typeof data.closed === 'boolean') closed = data.closed;
+  if (data) {
+    if (data.seats) seats = data.seats;
+    if (data.students && data.students.length > 0) students = data.students; // Firebase 명단 우선
+    if (typeof data.closed === 'boolean') closed = data.closed;
+  }
   document.getElementById('closed-banner').style.display = closed ? 'block' : 'none';
   renderAll();
   _remoteUpdating = false;
@@ -272,6 +272,33 @@ function switchMode(mode, btn) {
 }
 
 window.addEventListener('DOMContentLoaded', () => {
+  // 헤더 날짜/회차 업데이트
+  const SESSION_MAP = {
+    'w1_0623':  {n:1,  date:'2026-06-23', day:'화'},
+    'w2_0629':  {n:2,  date:'2026-06-29', day:'월'},
+    'w3_0630':  {n:3,  date:'2026-06-30', day:'화'},
+    'w4_0706':  {n:4,  date:'2026-07-06', day:'월'},
+    'w5_0707':  {n:5,  date:'2026-07-07', day:'화'},
+    'w6_0709':  {n:6,  date:'2026-07-09', day:'목'},
+    'w7_0713':  {n:7,  date:'2026-07-13', day:'월'},
+    'w8_0714':  {n:8,  date:'2026-07-14', day:'화'},
+    'w9_0715':  {n:9,  date:'2026-07-15', day:'수'},
+    'w10_0716': {n:10, date:'2026-07-16', day:'목'},
+    'w11_0718': {n:11, date:'2026-07-18', day:'토'},
+    'w12_0720': {n:12, date:'2026-07-20', day:'월'},
+    'w13_0721': {n:13, date:'2026-07-21', day:'화'},
+    'w14_0723': {n:14, date:'2026-07-23', day:'목'},
+    'w15_0727': {n:15, date:'2026-07-27', day:'월'},
+  };
+  const sessInfo = SESSION_MAP[sessionId];
+  const hEl = document.getElementById('header-center');
+  if (hEl) {
+    if (sessInfo) {
+      hEl.innerHTML = `AI입문 &nbsp;|&nbsp; ${sessInfo.n}회차 &nbsp;|&nbsp; ${sessInfo.date} (${sessInfo.day})<br><span>302동 408호 &nbsp;|&nbsp; 12:00 – 14:50</span>`;
+    } else {
+      hEl.innerHTML = `AI입문 &nbsp;|&nbsp; ${sessionId}<br><span>302동 408호 &nbsp;|&nbsp; 12:00 – 14:50</span>`;
+    }
+  }
   // URL 파라미터에 따라 초기 버튼 active 상태 동기화
   if (isAdmin) {
     document.getElementById('btn-student').classList.remove('active');
@@ -334,7 +361,7 @@ function buildNameList(n2s) {
     const major = typeof s==='object'?s.major:'';
     const seated = !!n2s[nm];
     const isMe = !isAdmin && nm === myName;
-    const canDrag = !closed && (isAdmin || isMe);
+    const canDrag = !closed && (isAdmin || (isMe && !seated));
     let cls = '';
     if (seated) cls += ' seated';
     if (isMe && !seated) cls += ' is-me';
