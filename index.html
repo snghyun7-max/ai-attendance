@@ -218,6 +218,7 @@ const db = firebase.database();
 const urlParams = new URLSearchParams(window.location.search);
 const sessionId = urlParams.get('session') || 'default';
 const sessionRef = db.ref('sessions/' + sessionId);
+const rosterRef  = db.ref('roster');
 
 // URL 파라미터로 자동 뷰 전환
 const viewParam = urlParams.get('view');   // 'student' 또는 'admin'
@@ -233,26 +234,41 @@ if (viewParam === 'admin' && keyParam === ADMIN_KEY_B64) {
 }
 
 
-let _remoteUpdating = false; // 원격 업데이트 중 무한루프 방지
+let _remoteUpdating = false;
+let _rosterLoaded = false; // roster 첫 로드 완료 여부
 
-// 원격 변경 수신 → 로컬 상태 갱신 후 화면 다시 그림
+// ── roster (전역 명단) 수신 ──
+rosterRef.on('value', (snap) => {
+  const data = snap.val();
+  if (data && data.students && data.students.length > 0) {
+    students = data.students;
+  }
+  _rosterLoaded = true;
+  renderAll();
+});
+
+// ── 세션 (좌석/마감) 수신 ──
 sessionRef.on('value', (snap) => {
   const data = snap.val();
   _remoteUpdating = true;
   if (data) {
     if (data.seats) seats = data.seats;
-    if (data.students && data.students.length > 0) students = data.students; // Firebase 명단 우선
     if (typeof data.closed === 'boolean') closed = data.closed;
   }
   document.getElementById('closed-banner').style.display = closed ? 'block' : 'none';
-  renderAll();
+  if (_rosterLoaded) renderAll();
   _remoteUpdating = false;
 });
 
-// 로컬 변경 → Firebase로 전송
+// 로컬 변경 → Firebase로 전송 (seats/closed만 세션에)
 function pushToFirebase(){
   if (_remoteUpdating) return;
-  sessionRef.set({ seats, students, closed });
+  sessionRef.set({ seats, closed });
+}
+
+// 명단만 roster에 저장 (전 회차 공유)
+function pushRoster(){
+  rosterRef.set({ students, updatedAt: sessionId });
 }
 
 // ── 모드 전환 ──
@@ -592,8 +608,9 @@ function saveRoster(){
   students = parsed;
   document.getElementById('roster-modal').style.display='none';
   afterChange();
-  pushToFirebase();
-  toast(`✅ 명단 저장 (${parsed.length}명)`);
+  pushRoster();      // 명단은 roster에 저장 (전 회차 공유)
+  pushToFirebase();  // 좌석/마감 상태는 세션에 저장
+  toast(`✅ 명단 저장 (${parsed.length}명) — 전 회차 적용됨`);
 }
 
 function claimName(){
