@@ -210,11 +210,6 @@ let students = [
 
 let seats={}, excused=new Set(), myName=null, isAdmin=false, closed=false, dragName=null, selectedSrc=null;
 
-// ── localStorage로 이 기기의 이름 복원 ──
-const LS_KEY = 'ai-attendance-name-' + sessionId;
-const _savedName = localStorage.getItem(LS_KEY);
-if (_savedName) myName = _savedName;
-
 // ── Firebase 연동 ──
 const firebaseConfig = {
   apiKey: "AIzaSyCvpg8GiKNER0yQtnEz-_ueetC4fuG2b_c",
@@ -234,6 +229,11 @@ const sessionId = urlParams.get('session') || 'default';
 const sessionRef = db.ref('sessions/' + sessionId);
 const rosterRef  = db.ref('roster');
 
+// ── localStorage로 이 기기의 이름 복원 (sessionId 선언 후에 실행) ──
+const LS_KEY = 'ai-attendance-name-' + sessionId;
+const _savedName = localStorage.getItem(LS_KEY);
+if (_savedName) myName = _savedName;
+
 // URL 파라미터로 자동 뷰 전환
 const viewParam = urlParams.get('view');   // 'student' 또는 'admin'
 const keyParam  = urlParams.get('key');    // 관리자 비밀번호 base64
@@ -241,11 +241,10 @@ const ADMIN_KEY_B64 = btoa('1111');        // MTExMQ==
 
 if (viewParam === 'admin' && keyParam === ADMIN_KEY_B64) {
   isAdmin = true;
-  document.getElementById('mode-switch-bar').style.display = 'flex';
 } else if (viewParam === 'student') {
   isAdmin = false;
-  document.getElementById('mode-switch-bar').style.display = 'none';
 }
+// ※ DOM 조작은 DOMContentLoaded에서 처리
 
 
 let _remoteUpdating = false;
@@ -353,10 +352,19 @@ window.addEventListener('DOMContentLoaded', () => {
       hEl.innerHTML = `AI입문 &nbsp;|&nbsp; ${sessionId}<br><span>302동 408호 &nbsp;|&nbsp; 12:00 – 14:50</span>`;
     }
   }
-  // URL 파라미터에 따라 초기 버튼 active 상태 동기화
+  // 관리자/학생 초기 UI 세팅
+  const modeSwitchBar = document.getElementById('mode-switch-bar');
+  const modeBadge = document.getElementById('mode-badge');
   if (isAdmin) {
-    document.getElementById('btn-student').classList.remove('active');
-    document.getElementById('btn-admin').classList.add('active');
+    if (modeSwitchBar) modeSwitchBar.style.display = 'flex';
+    if (modeBadge) { modeBadge.className = 'badge badge-admin'; modeBadge.textContent = '👨‍🏫 관리자'; }
+    const btnAdmin = document.getElementById('btn-admin');
+    const btnStudent = document.getElementById('btn-student');
+    if (btnAdmin) btnAdmin.classList.add('active');
+    if (btnStudent) btnStudent.classList.remove('active');
+  } else {
+    if (modeSwitchBar) modeSwitchBar.style.display = 'none';
+    if (modeBadge) { modeBadge.className = 'badge badge-student'; modeBadge.textContent = '🎓 학생'; }
   }
   renderAll();
 });
@@ -420,7 +428,8 @@ function buildNameList(n2s) {
     const seated = !!n2s[nm];
     const isExcused = excused.has(nm);
     const isMe = !isAdmin && nm === myName;
-    const canDrag = !closed && !isExcused && (isAdmin || (isMe && !seated));
+    // 학생 뷰: 미착석·미결석인 경우 드래그 가능 (dragstart에서 myName 자동 세팅)
+    const canDrag = !closed && !isExcused && !seated && (isAdmin || !isAdmin);
     let cls = '';
     if (seated) cls += ' seated';
     if (isExcused) cls += ' seated'; // 결석인정도 회색 처리
@@ -438,7 +447,13 @@ function attachDrag() {
   document.querySelectorAll('#name-list li.can-drag').forEach(li => {
     li.draggable = true;
     li.addEventListener('dragstart', e => {
-      dragName = li.dataset.name; selectedSrc = null;
+      const nm = li.dataset.name;
+      // 학생 뷰: 드래그 시작할 때 해당 이름으로 자동 세팅
+      if (!isAdmin) {
+        myName = nm;
+        localStorage.setItem(LS_KEY, nm);
+      }
+      dragName = nm; selectedSrc = null;
       e.dataTransfer.effectAllowed = 'move';
       li.classList.add('dragging');
     });
@@ -553,13 +568,11 @@ function buildExcuseHTML(n2s) {
     return `<span class="excuse-chip">${n}${canRemove ? `<span class="rm" onclick="removeExcuse('${n}')">✕</span>` : ''}</span>`;
   }).join('');
 
-  // 학생: 본인 이름이 결석인정에 없고, 착석도 안 한 경우에만 드롭 가능
-  const myExcused = excused.has(myName);
-  const mySeated = !!n2s[myName];
-  const canDrop = !closed && (isAdmin || (!isAdmin && myName && !myExcused && !mySeated));
+  // 결석인정 드롭존: 마감 전이면 항상 열어두고, exDrop 내부에서 유효성 검사
+  const canDrop = !closed;
 
   return `<div class="excuse-card">
-    <h3>📋 결석인정 ${isAdmin ? '<span style="font-size:11px;color:#999;font-weight:400">(드래그로 추가/✕로 제거)</span>' : '<span style="font-size:11px;color:#999;font-weight:400">(내 이름을 여기로 드래그하면 결석인정 처리)</span>'}</h3>
+    <h3>📋 결석인정 ${isAdmin ? '<span style="font-size:11px;color:#999;font-weight:400">(드래그로 추가 / ✕로 제거 / 좌석 클릭으로 이동)</span>' : '<span style="font-size:11px;color:#999;font-weight:400">(이름 드래그 → 여기 또는 좌석으로 자유롭게 이동)</span>'}</h3>
     <div class="excuse-drop" id="excuse-drop"
       ondragover="${canDrop ? 'exOv(event)' : 'event.preventDefault()'}"
       ondragleave="exOl(event)"
@@ -588,8 +601,14 @@ function exDrop(e){
   const nm = dragName; dragName=null;
   // 학생은 본인 이름만
   if(!isAdmin && nm !== myName){toast('⚠️ 본인 이름만 결석인정 처리할 수 있어요');return;}
-  if(excused.has(nm)){toast('이미 결석인정 처리됨');return;}
-  // 기존 좌석에서 제거
+  if(excused.has(nm)){
+    // 이미 결석인정 → 취소하고 다시 미착석 상태로
+    excused.delete(nm);
+    afterChange();
+    toast(`↩️ "${nm}" 결석인정 취소`);
+    return;
+  }
+  // 좌석에 있었으면 좌석 제거 후 결석인정으로 이동
   Object.keys(seats).forEach(s=>{if(seats[s]===nm)delete seats[s];});
   excused.add(nm);
   afterChange();
@@ -603,6 +622,8 @@ function ol(e){e.currentTarget.classList.remove('dragover');}
 function od(e,sid){
   e.preventDefault();e.currentTarget.classList.remove('dragover');
   if(!dragName||closed)return;
+  // 좌석에 배치 시 결석인정 목록에서 제거
+  excused.delete(dragName);
   assignSeat(dragName,sid);dragName=null;
 }
 
@@ -615,6 +636,12 @@ function sc(sid){
     return;
   }
   if(!myName){toast('⚠️ 먼저 본인 이름을 선택하세요');return;}
+  // 결석인정 상태에서 좌석 클릭 → 결석인정 취소하고 착석
+  if(excused.has(myName)){
+    excused.delete(myName);
+    assignSeat(myName,sid);
+    return;
+  }
   if(occ===myName){
     if(selectedSrc===sid){selectedSrc=null;refreshChart();toast('↩️ 이동 취소');}
     else{selectedSrc=sid;refreshChart();toast('✋ 이동할 빈 자리를 클릭하세요');}
