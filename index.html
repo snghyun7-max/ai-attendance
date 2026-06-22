@@ -397,11 +397,13 @@ function renderAll() {
       </div>
       <div id="chart-area" style="flex:1;min-width:0;display:flex;flex-direction:column;gap:10px">
         ${!isAdmin ? `<div class="student-guide">
-          ① 내 이름 선택 → 확인 클릭 → 빈 자리 클릭하면 착석!
+          ① 왼쪽 명단에서 내 이름 드래그 → 빈 자리에 놓기
           &nbsp;&nbsp;|&nbsp;&nbsp;
           ② 내 자리(파란색) 클릭 → 다른 빈 자리 클릭하면 이동
           &nbsp;&nbsp;|&nbsp;&nbsp;
           ③ 1인 1좌석만 가능
+          &nbsp;&nbsp;|&nbsp;&nbsp;
+          ④ 사유 결석자는 아래 <b>결석인정</b> 칸에 내 이름 드래그
         </div>` : ''}
         <div id="chart-wrap">${buildChartHTML()}</div>
       </div>
@@ -428,8 +430,8 @@ function buildNameList(n2s) {
     const seated = !!n2s[nm];
     const isExcused = excused.has(nm);
     const isMe = !isAdmin && nm === myName;
-    // 학생 뷰: 미착석·미결석인 경우 드래그 가능 (dragstart에서 myName 자동 세팅)
-    const canDrag = !closed && !isExcused && !seated && (isAdmin || !isAdmin);
+    // 학생 뷰: 본인(myName)이거나, 아직 아무도 선택 안 했을 때만 드래그 가능
+    const canDrag = !closed && !isExcused && !seated && (isAdmin || (!isAdmin && (!myName || nm === myName)));
     let cls = '';
     if (seated) cls += ' seated';
     if (isExcused) cls += ' seated'; // 결석인정도 회색 처리
@@ -437,8 +439,9 @@ function buildNameList(n2s) {
     if (canDrag) cls += ' can-drag';
     const sub = isAdmin && (college||major) ? `<span style="font-size:11px;color:#8a9ab0;margin-left:4px">(${[college,major].filter(Boolean).join('/')})</span>` : '';
     const badge = isExcused ? '<span style="font-size:10px;background:#f5c842;color:#5a3800;border-radius:8px;padding:1px 6px;margin-left:4px">결석인정</span>' : '';
+    const adminReset = isAdmin && (seated || isExcused) ? `<button onclick="resetStudent('${nm}')" style="font-size:10px;padding:2px 6px;margin-left:6px;background:#f5e0e0;color:#902020;border:1px solid #e0a0a0;border-radius:4px;cursor:pointer">리셋</button>` : '';
     return `<li class="${cls.trim()}" data-name="${nm}">
-      <span>${nm}${badge}${sub}</span>${seated&&!isExcused?'<span class="chk">✓</span>':''}
+      <span>${nm}${badge}${sub}</span>${seated&&!isExcused?'<span class="chk">✓</span>':''}${adminReset}
     </li>`;
   }).join('');
 }
@@ -448,8 +451,13 @@ function attachDrag() {
     li.draggable = true;
     li.addEventListener('dragstart', e => {
       const nm = li.dataset.name;
-      // 학생 뷰: 드래그 시작할 때 해당 이름으로 자동 세팅
       if (!isAdmin) {
+        // 이미 다른 사람으로 설정된 경우 차단
+        if (myName && myName !== nm) {
+          e.preventDefault();
+          toast(`⚠️ "${myName}"으로 이미 선택됨. 본인 이름만 드래그하세요`);
+          return;
+        }
         myName = nm;
         localStorage.setItem(LS_KEY, nm);
       }
@@ -546,7 +554,6 @@ function buildChartHTML() {
   sectionsHTML += `</div>`;
 
   return `<div class="chart-outer">
-    ${isAdmin ? back : board}
     ${sectionsHTML}
     ${isAdmin ? board : back}
   </div>`;
@@ -565,7 +572,9 @@ function buildDoorCol() {
 function buildExcuseHTML(n2s) {
   const chips = [...excused].map(n => {
     const canRemove = isAdmin || (!isAdmin && n === myName && !closed);
-    return `<span class="excuse-chip">${n}${canRemove ? `<span class="rm" onclick="removeExcuse('${n}')">✕</span>` : ''}</span>`;
+    const canDragChip = !closed && (isAdmin || n === myName);
+    return `<span class="excuse-chip" ${canDragChip ? `draggable="true" ondragstart="exChipDrag(event,'${n}')"` : ''}
+      style="${canDragChip ? 'cursor:grab' : ''}">${n}${canRemove ? `<span class="rm" onclick="removeExcuse('${n}')">✕</span>` : ''}</span>`;
   }).join('');
 
   // 결석인정 드롭존: 마감 전이면 항상 열어두고, exDrop 내부에서 유효성 검사
@@ -594,6 +603,11 @@ function absentHTML(n2s) {
 
 function ov(e){e.preventDefault();if(!closed)e.currentTarget.classList.add('dragover');}
 function exOv(e){e.preventDefault();e.currentTarget.classList.add('dragover');}
+function exChipDrag(e, nm){
+  // 결석인정 칩을 드래그 → 좌석으로 이동 가능
+  dragName = nm;
+  e.dataTransfer.effectAllowed = 'move';
+}
 function exOl(e){e.currentTarget.classList.remove('dragover');}
 function exDrop(e){
   e.preventDefault();e.currentTarget.classList.remove('dragover');
@@ -680,7 +694,16 @@ function reopenSession(){
   closed=false;document.getElementById('closed-banner').style.display='none';
   renderAll();toast('🔓 재개');pushToFirebase();
 }
-function resetSeats(){if(!confirm('전체 초기화?'))return;seats={};afterChange();toast('🔄 초기화');}
+function resetSeats(){if(!confirm('전체 초기화?'))return;seats={};excused=new Set();afterChange();toast('🔄 초기화');}
+function resetStudent(nm){
+  if(!confirm(`"${nm}" 학생을 리셋할까요?`))return;
+  // 좌석 제거
+  Object.keys(seats).forEach(s=>{if(seats[s]===nm)delete seats[s];});
+  // 결석인정 제거
+  excused.delete(nm);
+  afterChange();
+  toast(`🔄 "${nm}" 리셋 완료`);
+}
 
 function loadRosterFile(e){
   const file = e.target.files[0];
