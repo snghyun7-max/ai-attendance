@@ -554,6 +554,7 @@ function buildChartHTML() {
   sectionsHTML += `</div>`;
 
   return `<div class="chart-outer">
+    ${isAdmin ? '' : board}
     ${sectionsHTML}
     ${isAdmin ? board : back}
   </div>`;
