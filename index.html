@@ -131,8 +131,8 @@ input,select,textarea{border:1.5px solid #c5d2e0;border-radius:7px;padding:7px 1
     <h1>📋 AI입문 좌석 출석</h1>
     <span class="badge" id="mode-badge">🎓 학생</span>
   </div>
-  <div class="header-center">
-    AI입문 &nbsp;|&nbsp; 1회차 1주차 &nbsp;|&nbsp; 2026-06-23 (화)<br>
+  <div class="header-center" id="header-center">
+    AI입문 &nbsp;|&nbsp; <span id="hdr-session">로딩 중...</span><br>
     <span>302동 408호 &nbsp;|&nbsp; 12:00 – 14:50</span>
   </div>
   <div></div>
@@ -209,6 +209,35 @@ firebase.initializeApp(firebaseConfig);
 const db = firebase.database();
 
 // URL 파라미터로 세션 구분 (없으면 'default')
+const SESSION_INFO = {
+  'w1_0623':  {n:1,  date:'2026-06-23', day:'화'},
+  'w2_0629':  {n:2,  date:'2026-06-29', day:'월'},
+  'w3_0630':  {n:3,  date:'2026-06-30', day:'화'},
+  'w4_0706':  {n:4,  date:'2026-07-06', day:'월'},
+  'w5_0707':  {n:5,  date:'2026-07-07', day:'화'},
+  'w6_0709':  {n:6,  date:'2026-07-09', day:'목'},
+  'w7_0713':  {n:7,  date:'2026-07-13', day:'월'},
+  'w8_0714':  {n:8,  date:'2026-07-14', day:'화'},
+  'w9_0715':  {n:9,  date:'2026-07-15', day:'수', note:'보강'},
+  'w10_0716': {n:10, date:'2026-07-16', day:'목'},
+  'w11_0718': {n:11, date:'2026-07-18', day:'토', note:'보강'},
+  'w12_0720': {n:12, date:'2026-07-20', day:'월'},
+  'w13_0721': {n:13, date:'2026-07-21', day:'화'},
+  'w14_0723': {n:14, date:'2026-07-23', day:'목'},
+  'w15_0727': {n:15, date:'2026-07-27', day:'월'},
+};
+
+function updateHeaderDate() {
+  const info = SESSION_INFO[sessionId];
+  const el = document.getElementById('hdr-session');
+  if (!el) return;
+  if (info) {
+    el.textContent = `${info.n}회차 · ${info.date} (${info.day})${info.note ? ' · '+info.note : ''}`;
+  } else {
+    el.textContent = sessionId || '세션 미지정';
+  }
+}
+
 const urlParams = new URLSearchParams(window.location.search);
 const sessionId = urlParams.get('session') || 'default';
 const sessionRef = db.ref('sessions/' + sessionId);
@@ -276,6 +305,7 @@ window.addEventListener('DOMContentLoaded', () => {
     document.getElementById('btn-student').classList.remove('active');
     document.getElementById('btn-admin').classList.add('active');
   }
+  updateHeaderDate();
   renderAll();
 });
 
@@ -554,18 +584,21 @@ function loadRosterFile(e){
   if(!file) return;
   const reader = new FileReader();
   reader.onload = (ev) => {
-    const wb = XLSX.read(ev.target.result, {type:'binary'});
-    const ws = wb.Sheets[wb.SheetNames[0]];
-    const rows = XLSX.utils.sheet_to_json(ws, {header:1});
-    // A열=이름, B열=대학, C열=전공
-    const parsed = rows
-      .map(r=>({name:String(r[0]||'').trim(), college:String(r[1]||'').trim(), major:String(r[2]||'').trim()}))
-      .filter(r=>r.name);
-    // textarea에 미리보기 (이름|대학|전공 형식)
-    document.getElementById('roster-ta').value = parsed.map(r=>`${r.name}\t${r.college}\t${r.major}`).join('\n');
-    toast(`📥 ${parsed.length}명 불러옴 — 저장 버튼을 눌러 적용`);
+    try {
+      const wb = XLSX.read(ev.target.result, {type:'array'});
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json(ws, {header:1});
+      const parsed = rows
+        .map(r=>({name:String(r[0]||'').trim(), college:String(r[1]||'').trim(), major:String(r[2]||'').trim()}))
+        .filter(r=>r.name);
+      document.getElementById('roster-ta').value = parsed.map(r=>`${r.name}\t${r.college}\t${r.major}`).join('\n');
+      toast(`📥 ${parsed.length}명 불러옴 — 저장 버튼을 눌러 적용`);
+    } catch(err) {
+      toast('❌ 파일 읽기 실패 — .xlsx 또는 .csv 파일인지 확인하세요');
+      console.error(err);
+    }
   };
-  reader.readAsBinaryString(file);
+  reader.readAsArrayBuffer(file);
 }
 
 function showRosterModal(){
