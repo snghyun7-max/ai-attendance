@@ -119,6 +119,15 @@ input,select,textarea{border:1.5px solid #c5d2e0;border-radius:7px;padding:7px 1
 .modal{background:#fff;border-radius:12px;padding:22px;max-width:440px;width:92%;max-height:80vh;overflow-y:auto;box-shadow:0 6px 28px rgba(0,0,0,.18)}
 .modal h3{color:#4a90d9;margin-bottom:10px}
 .modal-btns{display:flex;gap:8px;margin-top:13px;justify-content:flex-end}
+/* 결석인정 영역 */
+#excuse-section{margin:12px 16px 0;max-width:1700px;margin-left:auto;margin-right:auto;padding:0 16px}
+.excuse-card{background:#fff8ee;border:2px dashed #e0a040;border-radius:12px;padding:14px 18px}
+.excuse-card h3{font-size:13px;font-weight:700;color:#a06010;margin-bottom:10px}
+.excuse-drop{min-height:52px;background:#fff3dc;border:2px dashed #d4902a;border-radius:9px;padding:10px 12px;display:flex;flex-wrap:wrap;gap:8px;align-items:center;transition:background .15s}
+.excuse-drop.dragover{background:#ffe8b0}
+.excuse-chip{background:#f5c842;color:#5a3800;border-radius:20px;padding:4px 12px;font-size:12px;font-weight:700;display:flex;align-items:center;gap:6px}
+.excuse-chip .rm{cursor:pointer;font-size:14px;color:#8b5a00;font-weight:900}
+.excuse-placeholder{color:#c09040;font-size:12px;font-style:italic}
 </style>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
@@ -132,14 +141,14 @@ input,select,textarea{border:1.5px solid #c5d2e0;border-radius:7px;padding:7px 1
     <span class="badge" id="mode-badge">🎓 학생</span>
   </div>
   <div class="header-center" id="header-center">
-    AI입문 &nbsp;|&nbsp; <span id="hdr-session">로딩 중...</span><br>
+    AI입문 &nbsp;|&nbsp; 로딩 중...<br>
     <span>302동 408호 &nbsp;|&nbsp; 12:00 – 14:50</span>
   </div>
   <div></div>
 </div>
 
-<!-- ★ 상단 모드 전환 스위치 ★ -->
-<div id="mode-switch-bar">
+<!-- ★ 상단 모드 전환 스위치 ★ (관리자 URL로 접속한 경우에만 표시) -->
+<div id="mode-switch-bar" style="display:none">
   <span>화면 전환:</span>
   <div id="mode-toggle">
     <button class="active" id="btn-student" onclick="switchMode('student',this)">🎓 학생 화면</button>
@@ -169,19 +178,13 @@ input,select,textarea{border:1.5px solid #c5d2e0;border-radius:7px;padding:7px 1
 <script>
 const LAYOUT = [
   { id:'sec1', rows:[
-    {t:'ghost', n:3},   // r0: 앞에서 1번째 — 빈공간
-    {t:'access', n:1},  // r1: 앞에서 2번째 — 장애인석
-    {t:'desk', n:3},{t:'desk', n:3},{t:'desk', n:3},{t:'desk', n:3},{t:'desk', n:3},{t:'desk', n:3},
-    // r2~r7: 앞에서 3~8번째 — 3인책상 6줄
+    {t:'ghost', n:3},{t:'ghost', n:3},{t:'access', n:1},
+    {t:'desk', n:3},{t:'desk', n:3},{t:'desk', n:3},{t:'desk', n:3},{t:'desk', n:3},
   ]},
   { id:'sec2', rows: Array.from({length:8},()=>({t:'desk',n:3})) },
   { id:'sec3', rows: Array.from({length:8},()=>({t:'desk',n:3})) },
   { id:'sec4', rows: Array.from({length:8},()=>({t:'desk',n:3})) },
-  { id:'sec5', rows: [
-    {t:'desk',n:3},{t:'desk',n:3},{t:'desk',n:3},
-    {t:'desk_pillar'}, // r3: 앞에서 4번째줄 — 오른쪽 1자리 기둥, 나머지 2자리 정상
-    {t:'desk',n:3},{t:'desk',n:3},{t:'desk',n:3},{t:'desk',n:3},
-  ]},
+  { id:'sec5', rows: Array.from({length:8},()=>({t:'desk',n:3})) },
 ];
 const DOOR_ROWS = [
   {t:'ghost'},{t:'door',txt:'🚪\n앞문'},
@@ -189,11 +192,23 @@ const DOOR_ROWS = [
   {t:'door',txt:'🚪\n뒷문'},
 ];
 
-// 기본 명단은 비워두고 Firebase에서 불러옴
-// (Firebase에 데이터 없을 때만 아래 기본값 사용)
-let students = [];
+let students = [
+  {name:'김진서',college:'',major:''},{name:'송현아',college:'',major:''},{name:'조현우',college:'',major:''},
+  {name:'천승환',college:'',major:''},{name:'최석현',college:'',major:''},{name:'김채영',college:'',major:''},
+  {name:'오찬영',college:'',major:''},{name:'최현빈',college:'',major:''},{name:'김리아',college:'',major:''},
+  {name:'김재현',college:'',major:''},{name:'현성우',college:'',major:''},{name:'황득겸',college:'',major:''},
+  {name:'서윤지',college:'',major:''},{name:'임준서',college:'',major:''},{name:'박민규',college:'',major:''},
+  {name:'백승원',college:'',major:''},{name:'양지원',college:'',major:''},{name:'박지원',college:'',major:''},
+  {name:'안희원',college:'',major:''},{name:'유동균',college:'',major:''},{name:'홍태균',college:'',major:''},
+  {name:'홍석우',college:'',major:''},{name:'허준석',college:'',major:''},{name:'정민식',college:'',major:''},
+  {name:'이현서',college:'',major:''},{name:'박인수',college:'',major:''},{name:'김민준',college:'',major:''},
+  {name:'이형원',college:'',major:''},{name:'김동연',college:'',major:''},{name:'신동창',college:'',major:''},
+  {name:'신진섭',college:'',major:''},{name:'김희서',college:'',major:''},{name:'임종민',college:'',major:''},
+  {name:'전서연',college:'',major:''},{name:'박성준',college:'',major:''},{name:'이수연',college:'',major:''},
+  {name:'김세준',college:'',major:''}
+];
 
-let seats={}, myName=null, isAdmin=false, closed=false, dragName=null, selectedSrc=null;
+let seats={}, excused=new Set(), myName=null, isAdmin=false, closed=false, dragName=null, selectedSrc=null;
 
 // ── Firebase 연동 ──
 const firebaseConfig = {
@@ -209,38 +224,15 @@ firebase.initializeApp(firebaseConfig);
 const db = firebase.database();
 
 // URL 파라미터로 세션 구분 (없으면 'default')
-const SESSION_INFO = {
-  'w1_0623':  {n:1,  date:'2026-06-23', day:'화'},
-  'w2_0629':  {n:2,  date:'2026-06-29', day:'월'},
-  'w3_0630':  {n:3,  date:'2026-06-30', day:'화'},
-  'w4_0706':  {n:4,  date:'2026-07-06', day:'월'},
-  'w5_0707':  {n:5,  date:'2026-07-07', day:'화'},
-  'w6_0709':  {n:6,  date:'2026-07-09', day:'목'},
-  'w7_0713':  {n:7,  date:'2026-07-13', day:'월'},
-  'w8_0714':  {n:8,  date:'2026-07-14', day:'화'},
-  'w9_0715':  {n:9,  date:'2026-07-15', day:'수', note:'보강'},
-  'w10_0716': {n:10, date:'2026-07-16', day:'목'},
-  'w11_0718': {n:11, date:'2026-07-18', day:'토', note:'보강'},
-  'w12_0720': {n:12, date:'2026-07-20', day:'월'},
-  'w13_0721': {n:13, date:'2026-07-21', day:'화'},
-  'w14_0723': {n:14, date:'2026-07-23', day:'목'},
-  'w15_0727': {n:15, date:'2026-07-27', day:'월'},
-};
-
-function updateHeaderDate() {
-  const info = SESSION_INFO[sessionId];
-  const el = document.getElementById('hdr-session');
-  if (!el) return;
-  if (info) {
-    el.textContent = `${info.n}회차 · ${info.date} (${info.day})${info.note ? ' · '+info.note : ''}`;
-  } else {
-    el.textContent = sessionId || '세션 미지정';
-  }
-}
-
 const urlParams = new URLSearchParams(window.location.search);
 const sessionId = urlParams.get('session') || 'default';
 const sessionRef = db.ref('sessions/' + sessionId);
+const rosterRef  = db.ref('roster');
+
+// ── localStorage로 이 기기의 이름 복원 (sessionId 선언 후에 실행) ──
+const LS_KEY = 'ai-attendance-name-' + sessionId;
+const _savedName = localStorage.getItem(LS_KEY);
+if (_savedName) myName = _savedName;
 
 // URL 파라미터로 자동 뷰 전환
 const viewParam = urlParams.get('view');   // 'student' 또는 'admin'
@@ -252,35 +244,68 @@ if (viewParam === 'admin' && keyParam === ADMIN_KEY_B64) {
 } else if (viewParam === 'student') {
   isAdmin = false;
 }
+// ※ DOM 조작은 DOMContentLoaded에서 처리
 
-let _remoteUpdating = false; // 원격 업데이트 중 무한루프 방지
 
-// 원격 변경 수신 → 로컬 상태 갱신 후 화면 다시 그림
+let _remoteUpdating = false;
+
+// ── roster + session 둘 다 받은 후 렌더 ──
+// 둘 중 하나라도 아직 안 오면 기다림
+let _gotRoster = false, _gotSession = false;
+function _tryRender() {
+  if (_gotRoster && _gotSession) {
+    document.getElementById('closed-banner').style.display = closed ? 'block' : 'none';
+    renderAll();
+  }
+}
+
+// ── roster (전역 명단) 수신 ──
+rosterRef.on('value', (snap) => {
+  const data = snap.val();
+  if (data && data.students && data.students.length > 0) {
+    students = data.students;
+  }
+  // roster 노드가 아예 없어도 기본 students 유지하고 진행
+  _gotRoster = true;
+  _tryRender();
+});
+
+// ── 세션 (좌석/마감) 수신 ──
 sessionRef.on('value', (snap) => {
   const data = snap.val();
-  if (!data) return;
   _remoteUpdating = true;
-  if (data.seats) seats = data.seats;
-  if (data.students) {
-    // 구버전(문자열 배열) → 객체 배열로 자동 변환
-    students = data.students.map(s =>
-      typeof s === 'string'
-        ? {name: s, college: '', major: ''}
-        : s
-    );
+  if (data) {
+    if (data.seats) seats = data.seats;
+    if (data.excused) excused = new Set(data.excused);
+    if (typeof data.closed === 'boolean') closed = data.closed;
   }
-  if (typeof data.closed === 'boolean') closed = data.closed;
-  document.getElementById('closed-banner').style.display = closed ? 'block' : 'none';
-  renderAll();
+  _gotSession = true;
+  if (_gotRoster) {
+    // 이미 초기 렌더 이후 업데이트
+    document.getElementById('closed-banner').style.display = closed ? 'block' : 'none';
+    renderAll();
+  }
   _remoteUpdating = false;
 });
+
+// ── 안전망: 2초 후에도 안 그려지면 강제 렌더 ──
+setTimeout(() => {
+  if (!_gotRoster || !_gotSession) {
+    _gotRoster = true; _gotSession = true;
+    document.getElementById('closed-banner').style.display = closed ? 'block' : 'none';
+    renderAll();
+  }
+}, 2000);
 
 // 로컬 변경 → Firebase로 전송
 function pushToFirebase(){
   if (_remoteUpdating) return;
-  const payload = { seats, closed };
-  if (students.length > 0) payload.students = students;
-  sessionRef.set(payload);
+  sessionRef.set({ seats, excused:[...excused], closed });
+}
+
+// 명단만 roster에 저장 (전 회차 공유)
+function pushRoster(){
+  rosterRef.set({ students, updatedAt: sessionId });
 }
 
 // ── 모드 전환 ──
@@ -300,12 +325,47 @@ function switchMode(mode, btn) {
 }
 
 window.addEventListener('DOMContentLoaded', () => {
-  // URL 파라미터에 따라 초기 버튼 active 상태 동기화
-  if (isAdmin) {
-    document.getElementById('btn-student').classList.remove('active');
-    document.getElementById('btn-admin').classList.add('active');
+  // 헤더 날짜/회차 업데이트
+  const SESSION_MAP = {
+    'w1_0623':  {n:1,  date:'2026-06-23', day:'화'},
+    'w2_0629':  {n:2,  date:'2026-06-29', day:'월'},
+    'w3_0630':  {n:3,  date:'2026-06-30', day:'화'},
+    'w4_0706':  {n:4,  date:'2026-07-06', day:'월'},
+    'w5_0707':  {n:5,  date:'2026-07-07', day:'화'},
+    'w6_0709':  {n:6,  date:'2026-07-09', day:'목'},
+    'w7_0713':  {n:7,  date:'2026-07-13', day:'월'},
+    'w8_0714':  {n:8,  date:'2026-07-14', day:'화'},
+    'w9_0715':  {n:9,  date:'2026-07-15', day:'수'},
+    'w10_0716': {n:10, date:'2026-07-16', day:'목'},
+    'w11_0718': {n:11, date:'2026-07-18', day:'토'},
+    'w12_0720': {n:12, date:'2026-07-20', day:'월'},
+    'w13_0721': {n:13, date:'2026-07-21', day:'화'},
+    'w14_0723': {n:14, date:'2026-07-23', day:'목'},
+    'w15_0727': {n:15, date:'2026-07-27', day:'월'},
+  };
+  const sessInfo = SESSION_MAP[sessionId];
+  const hEl = document.getElementById('header-center');
+  if (hEl) {
+    if (sessInfo) {
+      hEl.innerHTML = `AI입문 &nbsp;|&nbsp; ${sessInfo.n}회차 &nbsp;|&nbsp; ${sessInfo.date} (${sessInfo.day})<br><span>302동 408호 &nbsp;|&nbsp; 12:00 – 14:50</span>`;
+    } else {
+      hEl.innerHTML = `AI입문 &nbsp;|&nbsp; ${sessionId}<br><span>302동 408호 &nbsp;|&nbsp; 12:00 – 14:50</span>`;
+    }
   }
-  updateHeaderDate();
+  // 관리자/학생 초기 UI 세팅
+  const modeSwitchBar = document.getElementById('mode-switch-bar');
+  const modeBadge = document.getElementById('mode-badge');
+  if (isAdmin) {
+    if (modeSwitchBar) modeSwitchBar.style.display = 'flex';
+    if (modeBadge) { modeBadge.className = 'badge badge-admin'; modeBadge.textContent = '👨‍🏫 관리자'; }
+    const btnAdmin = document.getElementById('btn-admin');
+    const btnStudent = document.getElementById('btn-student');
+    if (btnAdmin) btnAdmin.classList.add('active');
+    if (btnStudent) btnStudent.classList.remove('active');
+  } else {
+    if (modeSwitchBar) modeSwitchBar.style.display = 'none';
+    if (modeBadge) { modeBadge.className = 'badge badge-student'; modeBadge.textContent = '🎓 학생'; }
+  }
   renderAll();
 });
 
@@ -325,7 +385,8 @@ function renderAll() {
           <h3>현황</h3>
           <div class="stat-row"><span>전체</span><span class="stat-num c-blue">${names.length}</span></div>
           <div class="stat-row"><span>착석</span><span class="stat-num c-green">${cnt}</span></div>
-          <div class="stat-row"><span>미착석</span><span class="stat-num c-red">${names.length-cnt}</span></div>
+          <div class="stat-row"><span>결석인정</span><span class="stat-num" style="color:#d4902a">${excused.size}</span></div>
+          <div class="stat-row"><span>미착석</span><span class="stat-num c-red">${names.length-cnt-excused.size}</span></div>
           <div id="prog-bg"><div id="prog-fill" style="width:${pct}%"></div></div>
           <div id="prog-txt">${pct}%</div>
         </div>
@@ -336,16 +397,21 @@ function renderAll() {
       </div>
       <div id="chart-area" style="flex:1;min-width:0;display:flex;flex-direction:column;gap:10px">
         ${!isAdmin ? `<div class="student-guide">
-          ① 내 이름 선택 → 확인 클릭 → 빈 자리 클릭하면 착석!
+          ① 왼쪽 명단에서 내 이름 드래그 → 빈 자리에 놓기
           &nbsp;&nbsp;|&nbsp;&nbsp;
           ② 내 자리(파란색) 클릭 → 다른 빈 자리 클릭하면 이동
           &nbsp;&nbsp;|&nbsp;&nbsp;
           ③ 1인 1좌석만 가능
+          &nbsp;&nbsp;|&nbsp;&nbsp;
+          ④ 사유 결석자는 아래 <b>결석인정</b> 칸에 내 이름 드래그
         </div>` : ''}
         <div id="chart-wrap">${buildChartHTML()}</div>
       </div>
     </div>
     ${isAdmin ? absentHTML(n2s) : ''}
+  </div>
+  <div id="excuse-section">
+    ${buildExcuseHTML(n2s)}
   </div>`;
 
   attachDrag();
@@ -362,15 +428,20 @@ function buildNameList(n2s) {
     const college = typeof s==='object'?s.college:'';
     const major = typeof s==='object'?s.major:'';
     const seated = !!n2s[nm];
+    const isExcused = excused.has(nm);
     const isMe = !isAdmin && nm === myName;
-    const canDrag = !closed && (isAdmin || isMe);
+    // 학생 뷰: 본인(myName)이거나, 아직 아무도 선택 안 했을 때만 드래그 가능
+    const canDrag = !closed && !isExcused && !seated && (isAdmin || (!isAdmin && (!myName || nm === myName)));
     let cls = '';
     if (seated) cls += ' seated';
-    if (isMe && !seated) cls += ' is-me';
+    if (isExcused) cls += ' seated'; // 결석인정도 회색 처리
+    if (isMe && !seated && !isExcused) cls += ' is-me';
     if (canDrag) cls += ' can-drag';
     const sub = isAdmin && (college||major) ? `<span style="font-size:11px;color:#8a9ab0;margin-left:4px">(${[college,major].filter(Boolean).join('/')})</span>` : '';
+    const badge = isExcused ? '<span style="font-size:10px;background:#f5c842;color:#5a3800;border-radius:8px;padding:1px 6px;margin-left:4px">결석인정</span>' : '';
+    const adminReset = isAdmin && (seated || isExcused) ? `<button onclick="resetStudent('${nm}')" style="font-size:10px;padding:2px 6px;margin-left:6px;background:#f5e0e0;color:#902020;border:1px solid #e0a0a0;border-radius:4px;cursor:pointer">리셋</button>` : '';
     return `<li class="${cls.trim()}" data-name="${nm}">
-      <span>${nm}${sub}</span>${seated?'<span class="chk">✓</span>':''}
+      <span>${nm}${badge}${sub}</span>${seated&&!isExcused?'<span class="chk">✓</span>':''}${adminReset}
     </li>`;
   }).join('');
 }
@@ -379,7 +450,18 @@ function attachDrag() {
   document.querySelectorAll('#name-list li.can-drag').forEach(li => {
     li.draggable = true;
     li.addEventListener('dragstart', e => {
-      dragName = li.dataset.name; selectedSrc = null;
+      const nm = li.dataset.name;
+      if (!isAdmin) {
+        // 이미 다른 사람으로 설정된 경우 차단
+        if (myName && myName !== nm) {
+          e.preventDefault();
+          toast(`⚠️ "${myName}"으로 이미 선택됨. 본인 이름만 드래그하세요`);
+          return;
+        }
+        myName = nm;
+        localStorage.setItem(LS_KEY, nm);
+      }
+      dragName = nm; selectedSrc = null;
       e.dataTransfer.effectAllowed = 'move';
       li.classList.add('dragging');
     });
@@ -419,7 +501,7 @@ function adminBar() {
 function studentBar(n2s) {
   if (closed) return `<span style="color:#c05050;font-weight:700">🔒 수업이 마감되었습니다</span>`;
   const names = getNames();
-  const avail = names.filter(n => !n2s[n] || n === myName);
+  const avail = names.filter(n => (!n2s[n] && !excused.has(n)) || n === myName);
   return `
     <span style="font-size:15px;color:#4a90d9;font-weight:800;white-space:nowrap">👤 내 이름 선택</span>
     <select id="name-dd" style="min-width:135px;font-size:14px;font-weight:700">
@@ -447,30 +529,6 @@ function buildChartHTML() {
         rowsHTML += `<div class="desk-row">${Array.from({length:row.n},()=>`<div class="seat ghost"></div>`).join('')}</div>`;
       } else if (row.t === 'access') {
         rowsHTML += `<div class="desk-row"><div class="seat access">♿</div></div>`;
-      } else if (row.t === 'desk_pillar') {
-        // 관리자뷰: 오른쪽이 기둥 → 오른쪽 1자리 ghost, 왼쪽 2자리 desk
-        // 학생뷰: 좌우 반전이므로 왼쪽 1자리 ghost, 오른쪽 2자리 desk
-        const ri = sec.rows.indexOf(row);
-        let cells = '';
-        // c0, c1 = 정상 좌석 / c2 = 기둥(ghost)
-        const cols = isAdmin ? [1, 0, 'ghost'] : ['ghost', 0, 1];
-        cols.forEach(ci => {
-          if (ci === 'ghost') {
-            cells += `<div class="seat ghost"></div>`;
-          } else {
-            const sid = `${sec.id}_r${ri}_c${ci}`;
-            const occ = seats[sid];
-            const isMe = !isAdmin && occ === myName;
-            const isSrc = selectedSrc === sid;
-            let cls = 'seat ' + (occ ? (isMe?'mine':'occupied') : 'empty');
-            if (isSrc) cls += ' selected-src';
-            const lbl = occ ? (occ.length>5 ? occ.slice(0,4)+'…' : occ) : '';
-            cells += `<div class="${cls}" id="s_${sid}" data-sid="${sid}"
-              ondragover="ov(event)" ondragleave="ol(event)" ondrop="od(event,'${sid}')"
-              onclick="sc('${sid}')">${lbl}</div>`;
-          }
-        });
-        rowsHTML += `<div class="desk-row">${cells}</div>`;
       } else {
         let cells = '';
         const cols = isAdmin ? Array.from({length:row.n},(_,i)=>row.n-1-i) : Array.from({length:row.n},(_,i)=>i);
@@ -496,7 +554,7 @@ function buildChartHTML() {
   sectionsHTML += `</div>`;
 
   return `<div class="chart-outer">
-    ${isAdmin ? back : board}
+    ${isAdmin ? '' : board}
     ${sectionsHTML}
     ${isAdmin ? board : back}
   </div>`;
@@ -512,8 +570,30 @@ function buildDoorCol() {
   }).join('')}</div>`;
 }
 
+function buildExcuseHTML(n2s) {
+  const chips = [...excused].map(n => {
+    const canRemove = isAdmin || (!isAdmin && n === myName && !closed);
+    const canDragChip = !closed && (isAdmin || n === myName);
+    return `<span class="excuse-chip" ${canDragChip ? `draggable="true" ondragstart="exChipDrag(event,'${n}')"` : ''}
+      style="${canDragChip ? 'cursor:grab' : ''}">${n}${canRemove ? `<span class="rm" onclick="removeExcuse('${n}')">✕</span>` : ''}</span>`;
+  }).join('');
+
+  // 결석인정 드롭존: 마감 전이면 항상 열어두고, exDrop 내부에서 유효성 검사
+  const canDrop = !closed;
+
+  return `<div class="excuse-card">
+    <h3>📋 결석인정 ${isAdmin ? '<span style="font-size:11px;color:#999;font-weight:400">(드래그로 추가 / ✕로 제거 / 좌석 클릭으로 이동)</span>' : '<span style="font-size:11px;color:#999;font-weight:400">(이름 드래그 → 여기 또는 좌석으로 자유롭게 이동)</span>'}</h3>
+    <div class="excuse-drop" id="excuse-drop"
+      ondragover="${canDrop ? 'exOv(event)' : 'event.preventDefault()'}"
+      ondragleave="exOl(event)"
+      ondrop="${canDrop ? 'exDrop(event)' : ''}">
+      ${chips || `<span class="excuse-placeholder">이름을 여기로 드래그하세요</span>`}
+    </div>
+  </div>`;
+}
+
 function absentHTML(n2s) {
-  const absent = getNames().filter(n=>!n2s[n]);
+  const absent = getNames().filter(n=>!n2s[n] && !excused.has(n));
   if (!absent.length)
     return `<div id="absent-wrap"><div class="absent-card" style="background:#d8f5e4;border-color:#7dd4a0;color:#1a5530;font-weight:700">✅ 전원 착석 완료!</div></div>`;
   return `<div id="absent-wrap"><div class="absent-card">
@@ -523,10 +603,42 @@ function absentHTML(n2s) {
 }
 
 function ov(e){e.preventDefault();if(!closed)e.currentTarget.classList.add('dragover');}
+function exOv(e){e.preventDefault();e.currentTarget.classList.add('dragover');}
+function exChipDrag(e, nm){
+  // 결석인정 칩을 드래그 → 좌석으로 이동 가능
+  dragName = nm;
+  e.dataTransfer.effectAllowed = 'move';
+}
+function exOl(e){e.currentTarget.classList.remove('dragover');}
+function exDrop(e){
+  e.preventDefault();e.currentTarget.classList.remove('dragover');
+  if(!dragName||closed)return;
+  const nm = dragName; dragName=null;
+  // 학생은 본인 이름만
+  if(!isAdmin && nm !== myName){toast('⚠️ 본인 이름만 결석인정 처리할 수 있어요');return;}
+  if(excused.has(nm)){
+    // 이미 결석인정 → 취소하고 다시 미착석 상태로
+    excused.delete(nm);
+    afterChange();
+    toast(`↩️ "${nm}" 결석인정 취소`);
+    return;
+  }
+  // 좌석에 있었으면 좌석 제거 후 결석인정으로 이동
+  Object.keys(seats).forEach(s=>{if(seats[s]===nm)delete seats[s];});
+  excused.add(nm);
+  afterChange();
+  toast(`📋 "${nm}" 결석인정 처리`);
+}
+function removeExcuse(nm){
+  if(!isAdmin && nm !== myName){toast('⚠️ 본인 것만 취소할 수 있어요');return;}
+  excused.delete(nm);afterChange();toast(`↩️ "${nm}" 결석인정 취소`);
+}
 function ol(e){e.currentTarget.classList.remove('dragover');}
 function od(e,sid){
   e.preventDefault();e.currentTarget.classList.remove('dragover');
   if(!dragName||closed)return;
+  // 좌석에 배치 시 결석인정 목록에서 제거
+  excused.delete(dragName);
   assignSeat(dragName,sid);dragName=null;
 }
 
@@ -539,6 +651,12 @@ function sc(sid){
     return;
   }
   if(!myName){toast('⚠️ 먼저 본인 이름을 선택하세요');return;}
+  // 결석인정 상태에서 좌석 클릭 → 결석인정 취소하고 착석
+  if(excused.has(myName)){
+    excused.delete(myName);
+    assignSeat(myName,sid);
+    return;
+  }
   if(occ===myName){
     if(selectedSrc===sid){selectedSrc=null;refreshChart();toast('↩️ 이동 취소');}
     else{selectedSrc=sid;refreshChart();toast('✋ 이동할 빈 자리를 클릭하세요');}
@@ -577,28 +695,34 @@ function reopenSession(){
   closed=false;document.getElementById('closed-banner').style.display='none';
   renderAll();toast('🔓 재개');pushToFirebase();
 }
-function resetSeats(){if(!confirm('전체 초기화?'))return;seats={};afterChange();toast('🔄 초기화');}
+function resetSeats(){if(!confirm('전체 초기화?'))return;seats={};excused=new Set();afterChange();toast('🔄 초기화');}
+function resetStudent(nm){
+  if(!confirm(`"${nm}" 학생을 리셋할까요?`))return;
+  // 좌석 제거
+  Object.keys(seats).forEach(s=>{if(seats[s]===nm)delete seats[s];});
+  // 결석인정 제거
+  excused.delete(nm);
+  afterChange();
+  toast(`🔄 "${nm}" 리셋 완료`);
+}
 
 function loadRosterFile(e){
   const file = e.target.files[0];
   if(!file) return;
   const reader = new FileReader();
   reader.onload = (ev) => {
-    try {
-      const wb = XLSX.read(ev.target.result, {type:'array'});
-      const ws = wb.Sheets[wb.SheetNames[0]];
-      const rows = XLSX.utils.sheet_to_json(ws, {header:1});
-      const parsed = rows
-        .map(r=>({name:String(r[0]||'').trim(), college:String(r[1]||'').trim(), major:String(r[2]||'').trim()}))
-        .filter(r=>r.name);
-      document.getElementById('roster-ta').value = parsed.map(r=>`${r.name}\t${r.college}\t${r.major}`).join('\n');
-      toast(`📥 ${parsed.length}명 불러옴 — 저장 버튼을 눌러 적용`);
-    } catch(err) {
-      toast('❌ 파일 읽기 실패 — .xlsx 또는 .csv 파일인지 확인하세요');
-      console.error(err);
-    }
+    const wb = XLSX.read(ev.target.result, {type:'binary'});
+    const ws = wb.Sheets[wb.SheetNames[0]];
+    const rows = XLSX.utils.sheet_to_json(ws, {header:1});
+    // A열=이름, B열=대학, C열=전공
+    const parsed = rows
+      .map(r=>({name:String(r[0]||'').trim(), college:String(r[1]||'').trim(), major:String(r[2]||'').trim()}))
+      .filter(r=>r.name);
+    // textarea에 미리보기 (이름|대학|전공 형식)
+    document.getElementById('roster-ta').value = parsed.map(r=>`${r.name}\t${r.college}\t${r.major}`).join('\n');
+    toast(`📥 ${parsed.length}명 불러옴 — 저장 버튼을 눌러 적용`);
   };
-  reader.readAsArrayBuffer(file);
+  reader.readAsBinaryString(file);
 }
 
 function showRosterModal(){
@@ -621,38 +745,35 @@ function saveRoster(){
   students = parsed;
   document.getElementById('roster-modal').style.display='none';
   afterChange();
-  pushToFirebase();
-  toast(`✅ 명단 저장 (${parsed.length}명)`);
+  pushRoster();      // 명단은 roster에 저장 (전 회차 공유)
+  pushToFirebase();  // 좌석/마감 상태는 세션에 저장
+  toast(`✅ 명단 저장 (${parsed.length}명) — 전 회차 적용됨`);
 }
 
 function claimName(){
   const v=document.getElementById('name-dd')?.value;
   if(!v){toast('이름을 선택해 주세요');return;}
   myName=v;selectedSrc=null;
-  toast(`"${v}" 선택 완료 — 빈 자리를 클릭하세요!`);
+  localStorage.setItem(LS_KEY, v); // 기기에 이름 저장
+  toast(`"${v}" 선택 완료 — 빈 자리를 클릭하거나 결석인정 칸에 이름을 놓으세요!`);
   renderAll();
 }
 
 function exportCSV(){
-  const n2s = getN2S();
-  const wb = XLSX.utils.book_new();
-  const header = ['이름','대학','전공','출석(1=출석/결석인정, 0=결석)','출석','결석','결석인정','좌석ID'];
-  const rows = [header];
+  const n2s=getN2S();
+  let csv='\uFEFF이름,대학,전공,착석여부,좌석ID,결석인정\n';
   students.forEach(s=>{
     const nm = typeof s==='object'?s.name:s;
     const college = typeof s==='object'?s.college:'';
     const major = typeof s==='object'?s.major:'';
-    const sid = n2s[nm]||'';
-    const seated = !!sid;
-    // 기본값: 착석=출석(1), 미착석=결석(0), 결석인정은 교수가 나중에 직접 입력
-    rows.push([nm, college, major, seated?1:0, seated?1:0, seated?0:1, 0, sid]);
+    const sid=n2s[nm]||'';
+    const ex=excused.has(nm);
+    csv+=`${nm},${college},${major},${ex?'결석인정':(sid?'출석':'결석')},${sid},${ex?'Y':''}\n`;
   });
-  const ws = XLSX.utils.aoa_to_sheet(rows);
-  // 컬럼 너비 설정
-  ws['!cols'] = [{wch:10},{wch:12},{wch:14},{wch:30},{wch:6},{wch:6},{wch:8},{wch:18}];
-  XLSX.utils.book_append_sheet(wb, ws, '출결');
-  XLSX.writeFile(wb, `AI입문_출결_${sessionId}.xlsx`);
-  toast('📥 엑셀 저장!');
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));
+  a.download=`AI입문_출결_${sessionId}.csv`;
+  a.click();toast('📥 CSV 저장!');
 }
 
 function toast(msg,ms=2600){
