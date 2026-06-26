@@ -488,14 +488,16 @@ function attachDrag() {
 function adminBar() {
   if (closed) return `
     <strong style="color:#c05050">🔒 마감 완료</strong>
-    <button class="btn-green" onclick="exportCSV()">📥 CSV 저장</button>
-    <button class="btn-orange" onclick="reopenSession()">🔓 재개</button>`;
+    <button class="btn-green" onclick="exportCSV()">📥 이번 회차 CSV</button>
+    <button class="btn-green" onclick="exportAllCSV()">📊 전체 회차 CSV</button>
+    <button class="btn-orange" onclick="reopenSession()">🔓 수업 재개</button>`;
   return `
     <strong style="color:#4a90d9;font-size:12px">👨‍🏫 관리자</strong>
     <button class="btn-red" onclick="closeSession()">🔒 수업 마감</button>
     <button class="btn-orange" onclick="resetSeats()">🔄 전체 초기화</button>
     <button class="btn-gray" onclick="showRosterModal()">📝 명단 수정</button>
-    <button class="btn-green" onclick="exportCSV()">📥 CSV 저장</button>`;
+    <button class="btn-green" onclick="exportCSV()">📥 이번 회차 CSV</button>
+    <button class="btn-green" onclick="exportAllCSV()">📊 전체 회차 CSV</button>`;
 }
 
 function studentBar(n2s) {
@@ -757,6 +759,92 @@ function claimName(){
   localStorage.setItem(LS_KEY, v); // 기기에 이름 저장
   toast(`"${v}" 선택 완료 — 빈 자리를 클릭하거나 결석인정 칸에 이름을 놓으세요!`);
   renderAll();
+}
+
+// ── 전체 회차 통합 CSV ──
+const SESSION_LIST = [
+  {id:'w1_0623',  n:1,  date:'2026-06-23'},
+  {id:'w2_0629',  n:2,  date:'2026-06-29'},
+  {id:'w3_0630',  n:3,  date:'2026-06-30'},
+  {id:'w4_0706',  n:4,  date:'2026-07-06'},
+  {id:'w5_0707',  n:5,  date:'2026-07-07'},
+  {id:'w6_0709',  n:6,  date:'2026-07-09'},
+  {id:'w7_0713',  n:7,  date:'2026-07-13'},
+  {id:'w8_0714',  n:8,  date:'2026-07-14'},
+  {id:'w9_0715',  n:9,  date:'2026-07-15'},
+  {id:'w10_0716', n:10, date:'2026-07-16'},
+  {id:'w11_0718', n:11, date:'2026-07-18'},
+  {id:'w12_0720', n:12, date:'2026-07-20'},
+  {id:'w13_0721', n:13, date:'2026-07-21'},
+  {id:'w14_0723', n:14, date:'2026-07-23'},
+  {id:'w15_0727', n:15, date:'2026-07-27'},
+];
+
+async function exportAllCSV(){
+  toast('📊 전체 회차 데이터 불러오는 중...', 5000);
+
+  // 1) 모든 회차 데이터 Firebase에서 병렬로 가져오기
+  const snapshots = await Promise.all(
+    SESSION_LIST.map(s => db.ref('sessions/' + s.id).once('value'))
+  );
+
+  // 2) 최신 명단 기준 (roster의 students)
+  const names = getNames(); // 현재 로드된 최신 명단
+
+  // 3) 회차별 데이터 파싱
+  const sessionData = snapshots.map((snap, i) => {
+    const data = snap.val();
+    if (!data) return null;
+    const seats = data.seats || {};
+    const excusedArr = data.excused || [];
+    const n2s = {};
+    Object.entries(seats).forEach(([sid, nm]) => n2s[nm] = sid);
+    return { ...SESSION_LIST[i], n2s, excused: new Set(excusedArr), closed: data.closed };
+  });
+
+  // 4) 데이터가 있는 회차만 필터링
+  const activeSessions = sessionData.filter(s => s !== null);
+  if (activeSessions.length === 0) {
+    toast('⚠️ 아직 저장된 회차 데이터가 없어요'); return;
+  }
+
+  // 5) CSV 생성
+  // 헤더: 이름, 대학, 전공, 1회차(6/23), 2회차(6/29), ..., 총출석, 출석률
+  const sessionHeaders = activeSessions.map(s => `${s.n}회차(${s.date.slice(5)})`).join(',');
+  let csv = '﻿이름,대학,전공,' + sessionHeaders + ',총출석,결석인정,결석,출석률
+';
+
+  students.forEach(s => {
+    const nm = typeof s === 'object' ? s.name : s;
+    const college = typeof s === 'object' ? s.college : '';
+    const major = typeof s === 'object' ? s.major : '';
+
+    let attended = 0, excusedCount = 0, absentCount = 0;
+    const cols = activeSessions.map(sess => {
+      if (sess.excused.has(nm)) {
+        excusedCount++;
+        return '결석인정';
+      } else if (sess.n2s[nm]) {
+        attended++;
+        return '출석';
+      } else {
+        absentCount++;
+        return '결석';
+      }
+    }).join(',');
+
+    const total = activeSessions.length;
+    const rate = total > 0 ? Math.round((attended + excusedCount) / total * 100) : 0;
+    csv += `${nm},${college},${major},${cols},${attended},${excusedCount},${absentCount},${rate}%
+`;
+  });
+
+  // 6) 다운로드
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([csv], {type:'text/csv;charset=utf-8'}));
+  a.download = `AI입문_전체출결_${new Date().toISOString().slice(0,10)}.csv`;
+  a.click();
+  toast(`📊 전체 ${activeSessions.length}회차 CSV 저장 완료!`);
 }
 
 function exportCSV(){
