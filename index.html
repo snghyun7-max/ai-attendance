@@ -178,13 +178,17 @@ input,select,textarea{border:1.5px solid #c5d2e0;border-radius:7px;padding:7px 1
 <script>
 const LAYOUT = [
   { id:'sec1', rows:[
-    {t:'ghost', n:3},{t:'ghost', n:3},{t:'access', n:1},
-    {t:'desk', n:3},{t:'desk', n:3},{t:'desk', n:3},{t:'desk', n:3},{t:'desk', n:3},
+    {t:'ghost', n:2},
+    {t:'access', n:1},
+    {t:'desk', n:3},{t:'desk', n:3},{t:'desk', n:3},{t:'desk', n:3},{t:'desk', n:3},{t:'desk', n:3},
   ]},
   { id:'sec2', rows: Array.from({length:8},()=>({t:'desk',n:3})) },
   { id:'sec3', rows: Array.from({length:8},()=>({t:'desk',n:3})) },
   { id:'sec4', rows: Array.from({length:8},()=>({t:'desk',n:3})) },
-  { id:'sec5', rows: Array.from({length:8},()=>({t:'desk',n:3})) },
+  { id:'sec5', rows: [
+    {t:'desk',n:3},{t:'desk',n:3},{t:'desk',n:3},{t:'ghost',n:3},
+    {t:'desk',n:3},{t:'desk',n:3},{t:'desk',n:3},{t:'desk',n:3},
+  ]},
 ];
 const DOOR_ROWS = [
   {t:'ghost'},{t:'door',txt:'🚪\n앞문'},
@@ -527,6 +531,38 @@ function buildChartHTML() {
         rowsHTML += `<div class="desk-row">${Array.from({length:row.n},()=>`<div class="seat ghost"></div>`).join('')}</div>`;
       } else if (row.t === 'access') {
         rowsHTML += `<div class="desk-row"><div class="seat access">♿</div></div>`;
+      } else if (row.t === 'mixed') {
+        // 장애인석 + 일반석 3개 혼합 행
+        const cols = isAdmin ? [2,1,0] : [0,1,2];
+        let cells = `<div class="seat access">♿</div>`;
+        if (isAdmin) {
+          // 관리자: 일반석 먼저(오른→왼), 장애인석 마지막
+          cells = cols.map(ci => {
+            const sid = `sec1_access_c${ci}`;
+            const occ = seats[sid];
+            const isMe = !isAdmin && occ === myName;
+            let cls = 'seat ' + (occ ? (isMe?'mine':'occupied') : 'empty');
+            if (selectedSrc === sid) cls += ' selected-src';
+            const lbl = occ ? (occ.length>5 ? occ.slice(0,4)+'…' : occ) : '';
+            return `<div class="${cls}" id="s_${sid}" data-sid="${sid}"
+              ondragover="ov(event)" ondragleave="ol(event)" ondrop="od(event,'${sid}')"
+              onclick="sc('${sid}')">${lbl}</div>`;
+          }).join('') + `<div class="seat access">♿</div>`;
+        } else {
+          // 학생: 장애인석 먼저, 일반석
+          cells = `<div class="seat access">♿</div>` + cols.map(ci => {
+            const sid = `sec1_access_c${ci}`;
+            const occ = seats[sid];
+            const isMe = !isAdmin && occ === myName;
+            let cls = 'seat ' + (occ ? (isMe?'mine':'occupied') : 'empty');
+            if (selectedSrc === sid) cls += ' selected-src';
+            const lbl = occ ? (occ.length>5 ? occ.slice(0,4)+'…' : occ) : '';
+            return `<div class="${cls}" id="s_${sid}" data-sid="${sid}"
+              ondragover="ov(event)" ondragleave="ol(event)" ondrop="od(event,'${sid}')"
+              onclick="sc('${sid}')">${lbl}</div>`;
+          }).join('');
+        }
+        rowsHTML += `<div class="desk-row">${cells}</div>`;
       } else {
         let cells = '';
         const cols = isAdmin ? Array.from({length:row.n},(_,i)=>row.n-1-i) : Array.from({length:row.n},(_,i)=>i);
