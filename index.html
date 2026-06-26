@@ -248,16 +248,7 @@ if (viewParam === 'admin' && keyParam === ADMIN_KEY_B64) {
 
 
 let _remoteUpdating = false;
-
-// ── roster + session 둘 다 받은 후 렌더 ──
-// 둘 중 하나라도 아직 안 오면 기다림
 let _gotRoster = false, _gotSession = false;
-function _tryRender() {
-  if (_gotRoster && _gotSession) {
-    document.getElementById('closed-banner').style.display = closed ? 'block' : 'none';
-    renderAll();
-  }
-}
 
 // ── roster (전역 명단) 수신 ──
 rosterRef.on('value', (snap) => {
@@ -265,37 +256,42 @@ rosterRef.on('value', (snap) => {
   if (data && data.students && data.students.length > 0) {
     students = data.students;
   }
-  // roster 노드가 아예 없어도 기본 students 유지하고 진행
   _gotRoster = true;
-  _tryRender();
+  _safeRender();
 });
 
 // ── 세션 (좌석/마감) 수신 ──
 sessionRef.on('value', (snap) => {
-  const data = snap.val();
   _remoteUpdating = true;
+  const data = snap.val();
   if (data) {
     if (data.seats) seats = data.seats;
     if (data.excused) excused = new Set(data.excused);
     if (typeof data.closed === 'boolean') closed = data.closed;
   }
   _gotSession = true;
-  if (_gotRoster) {
-    // 이미 초기 렌더 이후 업데이트
-    document.getElementById('closed-banner').style.display = closed ? 'block' : 'none';
-    renderAll();
-  }
   _remoteUpdating = false;
+  _safeRender();
 });
 
-// ── 안전망: 2초 후에도 안 그려지면 강제 렌더 ──
+// ── 둘 다 도착했을 때만 렌더 (중복 방지) ──
+let _rendered = false;
+function _safeRender() {
+  if (!_gotRoster || !_gotSession) return;
+  _rendered = true;
+  document.getElementById('closed-banner').style.display = closed ? 'block' : 'none';
+  renderAll();
+}
+
+// ── 안전망: 3초 후에도 안 그려지면 강제 렌더 ──
 setTimeout(() => {
-  if (!_gotRoster || !_gotSession) {
+  if (!_rendered) {
     _gotRoster = true; _gotSession = true;
+    _rendered = true;
     document.getElementById('closed-banner').style.display = closed ? 'block' : 'none';
     renderAll();
   }
-}, 2000);
+}, 3000);
 
 // 로컬 변경 → Firebase로 전송
 function pushToFirebase(){
@@ -366,7 +362,7 @@ window.addEventListener('DOMContentLoaded', () => {
     if (modeSwitchBar) modeSwitchBar.style.display = 'none';
     if (modeBadge) { modeBadge.className = 'badge badge-student'; modeBadge.textContent = '🎓 학생'; }
   }
-  renderAll();
+  // Firebase 응답 후 _safeRender에서 renderAll 호출하므로 여기선 생략
 });
 
 // ── 전체 렌더 ──
@@ -811,8 +807,7 @@ async function exportAllCSV(){
   // 5) CSV 생성
   // 헤더: 이름, 대학, 전공, 1회차(6/23), 2회차(6/29), ..., 총출석, 출석률
   const sessionHeaders = activeSessions.map(s => `${s.n}회차(${s.date.slice(5)})`).join(',');
-  let csv = '﻿이름,대학,전공,' + sessionHeaders + ',총출석,결석인정,결석,출석률
-';
+  let csv = '\uFEFF이름,대학,전공,' + sessionHeaders + ',총출석,결석인정,결석,출석률\n';
 
   students.forEach(s => {
     const nm = typeof s === 'object' ? s.name : s;
@@ -835,8 +830,7 @@ async function exportAllCSV(){
 
     const total = activeSessions.length;
     const rate = total > 0 ? Math.round((attended + excusedCount) / total * 100) : 0;
-    csv += `${nm},${college},${major},${cols},${attended},${excusedCount},${absentCount},${rate}%
-`;
+    csv += `${nm},${college},${major},${cols},${attended},${excusedCount},${absentCount},${rate}%\n`;
   });
 
   // 6) 다운로드
