@@ -186,7 +186,8 @@ const LAYOUT = [
   { id:'sec3', rows: Array.from({length:8},()=>({t:'desk',n:3})) },
   { id:'sec4', rows: Array.from({length:8},()=>({t:'desk',n:3})) },
   { id:'sec5', rows: [
-    {t:'desk',n:3},{t:'desk',n:3},{t:'desk',n:3},{t:'ghost',n:1},{t:'desk',n:2},
+    {t:'desk',n:3},{t:'desk',n:3},{t:'desk',n:3},
+    {t:'partial', ghost:1, desk:2},
     {t:'desk',n:3},{t:'desk',n:3},{t:'desk',n:3},{t:'desk',n:3},
   ]},
 ];
@@ -529,6 +530,35 @@ function buildChartHTML() {
       const row = sec.rows[ri];
       if (row.t === 'ghost') {
         rowsHTML += `<div class="desk-row">${Array.from({length:row.n},()=>`<div class="seat ghost"></div>`).join('')}</div>`;
+      } else if (row.t === 'partial') {
+        // 왼쪽 ghost + 오른쪽 desk (학생뷰), 관리자뷰는 반대
+        let cells = '';
+        if (isAdmin) {
+          // 관리자: desk 먼저(오른→왼), ghost 마지막
+          for (let ci = row.desk-1; ci >= 0; ci--) {
+            const sid = `sec5_partial_c${ci}`;
+            const occ = seats[sid];
+            const isMe = !isAdmin && occ === myName;
+            let cls = 'seat ' + (occ ? (isMe?'mine':'occupied') : 'empty');
+            if (selectedSrc === sid) cls += ' selected-src';
+            const lbl = occ ? (occ.length>5 ? occ.slice(0,4)+'…' : occ) : '';
+            cells += `<div class="${cls}" id="s_${sid}" data-sid="${sid}" ondragover="ov(event)" ondragleave="ol(event)" ondrop="od(event,'${sid}')" onclick="sc('${sid}')">${lbl}</div>`;
+          }
+          cells += Array.from({length:row.ghost},()=>`<div class="seat ghost"></div>`).join('');
+        } else {
+          // 학생: ghost 먼저, desk 나중
+          cells += Array.from({length:row.ghost},()=>`<div class="seat ghost"></div>`).join('');
+          for (let ci = 0; ci < row.desk; ci++) {
+            const sid = `sec5_partial_c${ci}`;
+            const occ = seats[sid];
+            const isMe = !isAdmin && occ === myName;
+            let cls = 'seat ' + (occ ? (isMe?'mine':'occupied') : 'empty');
+            if (selectedSrc === sid) cls += ' selected-src';
+            const lbl = occ ? (occ.length>5 ? occ.slice(0,4)+'…' : occ) : '';
+            cells += `<div class="${cls}" id="s_${sid}" data-sid="${sid}" ondragover="ov(event)" ondragleave="ol(event)" ondrop="od(event,'${sid}')" onclick="sc('${sid}')">${lbl}</div>`;
+          }
+        }
+        rowsHTML += `<div class="desk-row">${cells}</div>`;
       } else if (row.t === 'access') {
         rowsHTML += `<div class="desk-row"><div class="seat access">♿</div></div>`;
       } else if (row.t === 'mixed') {
